@@ -5,8 +5,10 @@ namespace App\Domain\Navigation;
 use App\Domain\Identity\Models\Role;
 use App\Domain\Navigation\Console\Commands\FlushMenuCache;
 use App\Domain\Navigation\Listeners\ForgetPresentedNavigationTree;
+use App\Domain\Navigation\Models\Menu;
 use App\Domain\Navigation\Repositories\Contracts\MenuRepositoryInterface;
 use App\Domain\Navigation\Repositories\Eloquent\MenuRepository;
+use App\Support\ActivityLog\SubjectAliasRegistrar;
 use App\Support\Navigation\PresentedTreeEpoch;
 use App\Support\Product\Events\ProductActivationStateChanged;
 use Illuminate\Support\Facades\Event;
@@ -45,5 +47,12 @@ class NavigationServiceProvider extends ServiceProvider
         Role::deleted($flushMenuCache);
 
         Event::listen(ProductActivationStateChanged::class, ForgetPresentedNavigationTree::class);
+
+        // The activity trail can filter by `?subject=menu`. That alias points at
+        // a model this package owns, so it is declared here through the
+        // kernel-owned contract — `silverspoon/audit` never imports navigation.
+        if ($this->app->bound(SubjectAliasRegistrar::class)) {
+            $this->app->make(SubjectAliasRegistrar::class)->register('menu', Menu::class);
+        }
     }
 }
