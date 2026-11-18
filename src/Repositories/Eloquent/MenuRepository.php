@@ -2,17 +2,17 @@
 
 namespace App\Domain\Navigation\Repositories\Eloquent;
 
+use App\Domain\Identity\Models\Role;
+use App\Domain\Identity\Models\User;
+use App\Domain\Navigation\Enums\MenuAudience;
 use App\Domain\Navigation\Exceptions\InvalidMenuParentException;
 use App\Domain\Navigation\Exceptions\InvalidMenuPositionException;
 use App\Domain\Navigation\Exceptions\MenuHasChildrenException;
-use App\Domain\Navigation\Enums\MenuAudience;
 use App\Domain\Navigation\Models\Menu;
-use App\Domain\Identity\Models\Role;
-use App\Domain\Identity\Models\User;
 use App\Domain\Navigation\Repositories\Contracts\MenuRepositoryInterface;
-use App\Support\Localization\TranslationResolver;
 use App\Domain\Navigation\Support\MenuLayout;
 use App\Support\DomainAccess\DomainAccessService;
+use App\Support\Localization\TranslationResolver;
 use App\Support\Product\ProductRegistry;
 use App\Support\Product\Services\ProductActivationService;
 use Illuminate\Database\Eloquent\Builder;

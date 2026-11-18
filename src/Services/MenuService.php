@@ -2,9 +2,9 @@
 
 namespace App\Domain\Navigation\Services;
 
+use App\Domain\Identity\Models\User;
 use App\Domain\Navigation\Enums\MenuAudience;
 use App\Domain\Navigation\Models\Menu;
-use App\Domain\Identity\Models\User;
 use App\Domain\Navigation\Repositories\Contracts\MenuRepositoryInterface;
 use App\Domain\Navigation\Support\MenuLayout;
 use App\Domain\Navigation\Support\NavigationRealtime;

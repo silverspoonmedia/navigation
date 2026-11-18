@@ -2,8 +2,8 @@
 
 namespace App\Domain\Navigation\Http\Requests;
 
-use App\Http\Requests\Concerns\InteractsWithListDisplayMode;
 use App\Domain\Navigation\Support\MenuLayout;
+use App\Http\Requests\Concerns\InteractsWithListDisplayMode;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;

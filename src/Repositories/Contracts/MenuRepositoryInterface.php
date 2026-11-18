@@ -2,8 +2,8 @@
 
 namespace App\Domain\Navigation\Repositories\Contracts;
 
-use App\Domain\Navigation\Models\Menu;
 use App\Domain\Identity\Models\User;
+use App\Domain\Navigation\Models\Menu;
 use App\Support\Navigation\PresentedTreeEpoch;
 
 interface MenuRepositoryInterface extends PresentedTreeEpoch

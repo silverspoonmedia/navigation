@@ -2,16 +2,17 @@
 
 namespace App\Domain\Navigation\Tests\Unit\Repositories\Eloquent;
 
+use App\Domain\Identity\Models\Role;
+use App\Domain\Identity\Models\User;
 use App\Domain\Navigation\Enums\MenuAudience;
 use App\Domain\Navigation\Exceptions\InvalidMenuParentException;
 use App\Domain\Navigation\Exceptions\InvalidMenuPositionException;
 use App\Domain\Navigation\Exceptions\MenuHasChildrenException;
 use App\Domain\Navigation\Models\Menu;
-use App\Domain\Identity\Models\Role;
-use App\Domain\Identity\Models\User;
 use App\Domain\Navigation\Repositories\Eloquent\MenuRepository;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Tests\Concerns\SeedsRolesAndPermissions;
 use Tests\TestCase;
 
@@ -383,7 +384,7 @@ class MenuRepositoryTest extends TestCase
         $this->repository->navigationTree($user, 'sidebar');
 
         $menuQueries = 0;
-        \Illuminate\Support\Facades\DB::listen(function ($query) use (&$menuQueries): void {
+        DB::listen(function ($query) use (&$menuQueries): void {
             if (str_contains($query->sql, ' from `menus`') || str_contains($query->sql, ' from "menus"')) {
                 $menuQueries++;
             }

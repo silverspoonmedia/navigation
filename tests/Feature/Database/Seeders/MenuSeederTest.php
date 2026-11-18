@@ -3,13 +3,13 @@
 namespace App\Domain\Navigation\Tests\Feature\Database\Seeders;
 
 use App\Domain\Identity\Models\User;
+use App\Domain\Navigation\Database\Seeders\MenuSeeder;
 use App\Domain\Navigation\Enums\MenuAudience;
 use App\Domain\Navigation\Models\Menu;
 use App\Domain\Navigation\Repositories\Eloquent\MenuRepository;
 use App\Domain\Navigation\Support\MenuLayout;
 use App\Support\Product\Services\ProductActivationService;
 use Database\Seeders\ArchivdRoleSeeder;
-use App\Domain\Navigation\Database\Seeders\MenuSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;

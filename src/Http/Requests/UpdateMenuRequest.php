@@ -7,6 +7,7 @@ use App\Domain\Navigation\Http\Requests\Concerns\NormalizesMenuPlacementFields;
 use App\Domain\Navigation\Http\Requests\Concerns\ValidatesMenuStructure;
 use App\Domain\Navigation\Models\Menu;
 use App\Support\Localization\Concerns\ValidatesTranslatableInput;
+use App\Support\Localization\LocalePreference;
 use App\Support\Navigation\SpaRouteRegistry;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -67,7 +68,7 @@ class UpdateMenuRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            $supportedLocales = \App\Support\Localization\LocalePreference::supported();
+            $supportedLocales = LocalePreference::supported();
 
             if ($this->has('name')) {
                 $this->validateTranslatableString($validator, 'name', $supportedLocales);

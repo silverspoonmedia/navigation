@@ -4,8 +4,8 @@ namespace App\Domain\Navigation\Models;
 
 use App\Domain\Identity\Models\Role;
 use App\Domain\Identity\Models\User;
-use App\Domain\Navigation\Enums\MenuAudience;
 use App\Domain\Navigation\Database\Factories\MenuFactory;
+use App\Domain\Navigation\Enums\MenuAudience;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -23,9 +23,6 @@ class Menu extends Model
     /** @use HasFactory<MenuFactory> */
     use HasFactory, HasTranslations, HasUuids, LogsActivity, SoftDeletes;
 
-    /**
-     * @return MenuFactory
-     */
     protected static function newFactory(): MenuFactory
     {
         return MenuFactory::new();

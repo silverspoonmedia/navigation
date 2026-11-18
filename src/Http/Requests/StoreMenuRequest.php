@@ -5,9 +5,10 @@ namespace App\Domain\Navigation\Http\Requests;
 use App\Domain\Navigation\Enums\MenuAudience;
 use App\Domain\Navigation\Http\Requests\Concerns\NormalizesMenuPlacementFields;
 use App\Domain\Navigation\Http\Requests\Concerns\ValidatesMenuStructure;
-use App\Support\Localization\Concerns\ValidatesTranslatableInput;
-use App\Support\Navigation\SpaRouteRegistry;
 use App\Domain\Navigation\Support\MenuLayout;
+use App\Support\Localization\Concerns\ValidatesTranslatableInput;
+use App\Support\Localization\LocalePreference;
+use App\Support\Navigation\SpaRouteRegistry;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -69,7 +70,7 @@ class StoreMenuRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            $supportedLocales = \App\Support\Localization\LocalePreference::supported();
+            $supportedLocales = LocalePreference::supported();
 
             $this->validateTranslatableString($validator, 'name', $supportedLocales);
             $this->validateTranslatableAllLocales($validator, 'name', $supportedLocales);
