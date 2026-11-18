@@ -50,7 +50,7 @@ class NavigationServiceProvider extends ServiceProvider
 
         // The activity trail can filter by `?subject=menu`. That alias points at
         // a model this package owns, so it is declared here through the
-        // kernel-owned contract — `silverspoon/audit` never imports navigation.
+        // kernel-owned contract — `silverspoonmedia/audit` never imports navigation.
         if ($this->app->bound(SubjectAliasRegistrar::class)) {
             $this->app->make(SubjectAliasRegistrar::class)->register('menu', Menu::class);
         }
