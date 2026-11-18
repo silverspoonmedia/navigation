@@ -8,7 +8,9 @@ use App\Domain\Navigation\Listeners\ForgetPresentedNavigationTree;
 use App\Domain\Navigation\Models\Menu;
 use App\Domain\Navigation\Repositories\Contracts\MenuRepositoryInterface;
 use App\Domain\Navigation\Repositories\Eloquent\MenuRepository;
+use App\Domain\Navigation\Support\Labels\MenuSubjectLabelPresenter;
 use App\Support\ActivityLog\SubjectAliasRegistrar;
+use App\Support\ActivityLog\SubjectLabelRegistrar;
 use App\Support\Navigation\PresentedTreeEpoch;
 use App\Support\Product\Events\ProductActivationStateChanged;
 use Illuminate\Support\Facades\Event;
@@ -53,6 +55,13 @@ class NavigationServiceProvider extends ServiceProvider
         // kernel-owned contract — `silverspoonmedia/audit` never imports navigation.
         if ($this->app->bound(SubjectAliasRegistrar::class)) {
             $this->app->make(SubjectAliasRegistrar::class)->register('menu', Menu::class);
+        }
+
+        // Same reason, other direction: the trail renders a label for each row, and
+        // a menu's label is its translated name, not an ID. The audit package owns
+        // the seam; this package supplies the presenter for the model it owns.
+        if ($this->app->bound(SubjectLabelRegistrar::class)) {
+            $this->app->make(SubjectLabelRegistrar::class)->register(Menu::class, new MenuSubjectLabelPresenter);
         }
     }
 }
