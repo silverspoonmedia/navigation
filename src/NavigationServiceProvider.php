@@ -11,6 +11,7 @@ use App\Domain\Navigation\Repositories\Eloquent\MenuRepository;
 use App\Domain\Navigation\Support\Labels\MenuSubjectLabelPresenter;
 use App\Support\ActivityLog\SubjectAliasRegistrar;
 use App\Support\ActivityLog\SubjectLabelRegistrar;
+use App\Support\ListActions\NavigationTreeFlusher;
 use App\Support\Navigation\PresentedTreeEpoch;
 use App\Support\Product\Events\ProductActivationStateChanged;
 use Illuminate\Support\Facades\Event;
@@ -27,6 +28,10 @@ class NavigationServiceProvider extends ServiceProvider
         // The kernel (DomainAccess) only needs the epoch contract; binding the
         // interface keeps the dependency pointing kernel -> package.
         $this->app->bind(PresentedTreeEpoch::class, MenuRepository::class);
+
+        // Identity (kernel) drops one viewer's tree after a user mutation. A
+        // kernel contract, so neither side names the other's classes.
+        $this->app->bind(NavigationTreeFlusher::class, MenuRepository::class);
     }
 
     public function boot(): void

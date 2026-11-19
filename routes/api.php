@@ -1,7 +1,14 @@
 <?php
 
 use App\Domain\Navigation\Http\Controllers\API\V1\MenuController;
+use App\Domain\Navigation\Http\Controllers\API\V1\MenuLookupController;
 use Illuminate\Support\Facades\Route;
+
+Route::prefix('navigation/lookups')->name('navigation.lookups.')->group(function (): void {
+    Route::middleware(['auth:api', 'permission:view menu'])
+        ->get('menus', [MenuLookupController::class, 'menus'])
+        ->name('menus');
+});
 
 Route::prefix('navigation/menus')->name('navigation.menus.')->group(function (): void {
     Route::middleware('jwt.optional')->get('/', [MenuController::class, 'index'])->name('index');

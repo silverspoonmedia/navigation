@@ -4,6 +4,10 @@ namespace App\Domain\Navigation\Support;
 
 /**
  * Known menu layout identifiers (sidebar, navbar, …).
+ *
+ * Package-owned: the Select2 menu lookup moved here with the endpoint
+ * (`/api/v1/navigation/lookups/menus`), so the kernel no longer needs a
+ * layout catalog contract.
  */
 class MenuLayout
 {
