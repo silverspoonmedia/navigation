@@ -191,21 +191,26 @@ class MenuLookupService
     {
         $locales = LocalePreference::supported();
 
-        return $menus
-            ->filter(function (Menu $menu) use ($needle, $locales): bool {
-                $name = $menu->getTranslations('name');
-                foreach ($locales as $locale) {
-                    if (isset($name[$locale]) && stripos((string) $name[$locale], $needle) !== false) {
-                        return true;
-                    }
-                }
+        $ids = [];
 
-                return stripos($menu->type, $needle) !== false;
-            })
-            ->map(fn (Menu $menu) => $menu->id)
-            ->values()
-            ->flip()
-            ->all();
+        foreach ($menus as $menu) {
+            $matched = false;
+            $names = $menu->getTranslations('name');
+
+            foreach ($locales as $locale) {
+                if (isset($names[$locale]) && stripos((string) $names[$locale], $needle) !== false) {
+                    $matched = true;
+
+                    break;
+                }
+            }
+
+            if ($matched || stripos($menu->type, $needle) !== false) {
+                $ids[(string) $menu->id] = true;
+            }
+        }
+
+        return $ids;
     }
 
     /**

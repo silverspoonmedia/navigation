@@ -57,11 +57,17 @@ class Menu extends Model
         ];
     }
 
+    /**
+     * @return BelongsTo<Menu, $this>
+     */
     public function parent(): BelongsTo
     {
         return $this->belongsTo(self::class, 'parent_id');
     }
 
+    /**
+     * @return HasMany<Menu, $this>
+     */
     public function children(): HasMany
     {
         return $this->hasMany(self::class, 'parent_id')->orderBy('order');
