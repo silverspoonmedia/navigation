@@ -5,13 +5,11 @@ namespace App\Domain\Navigation\Tests\Unit\Services;
 use App\Domain\Navigation\Enums\MenuAudience;
 use App\Domain\Navigation\Models\Menu;
 use App\Domain\Navigation\Services\MenuService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\Concerns\SeedsRolesAndPermissions;
-use Tests\TestCase;
+use App\Domain\Navigation\Tests\TestCase;
+use App\Support\Testing\Concerns\SeedsRolesAndPermissions;
 
 class MenuServiceTest extends TestCase
 {
-    use RefreshDatabase;
     use SeedsRolesAndPermissions;
 
     private MenuService $service;

@@ -7,14 +7,12 @@ use App\Domain\Identity\Models\User;
 use App\Domain\Navigation\Enums\MenuAudience;
 use App\Domain\Navigation\Models\Menu;
 use App\Domain\Navigation\Repositories\Contracts\MenuRepositoryInterface;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\Navigation\Tests\TestCase;
+use App\Support\Testing\Concerns\SeedsRolesAndPermissions;
 use PHPUnit\Framework\Attributes\DataProvider;
-use Tests\Concerns\SeedsRolesAndPermissions;
-use Tests\TestCase;
 
 class NavigationMenuTest extends TestCase
 {
-    use RefreshDatabase;
     use SeedsRolesAndPermissions;
 
     protected function setUp(): void

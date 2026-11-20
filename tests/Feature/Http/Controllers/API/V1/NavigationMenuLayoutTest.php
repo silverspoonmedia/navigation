@@ -6,13 +6,11 @@ use App\Domain\Identity\Models\User;
 use App\Domain\Navigation\Enums\MenuAudience;
 use App\Domain\Navigation\Repositories\Contracts\MenuRepositoryInterface;
 use App\Domain\Navigation\Support\MenuLayout;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\Concerns\SeedsRolesAndPermissions;
-use Tests\TestCase;
+use App\Domain\Navigation\Tests\TestCase;
+use App\Support\Testing\Concerns\SeedsRolesAndPermissions;
 
 class NavigationMenuLayoutTest extends TestCase
 {
-    use RefreshDatabase;
     use SeedsRolesAndPermissions;
 
     protected function setUp(): void

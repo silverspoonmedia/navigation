@@ -3,7 +3,7 @@
 namespace App\Domain\Navigation\Tests\Unit\Support;
 
 use App\Domain\Navigation\Support\MenuLayout;
-use Tests\TestCase;
+use App\Domain\Navigation\Tests\TestCase;
 
 class MenuLayoutTest extends TestCase
 {

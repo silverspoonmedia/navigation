@@ -6,13 +6,10 @@ use App\Domain\Navigation\Models\Menu;
 use App\Domain\Navigation\Repositories\Contracts\MenuRepositoryInterface;
 use App\Domain\Navigation\Support\MenuAncestorChain;
 use App\Domain\Navigation\Support\MenuLayout;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
+use App\Domain\Navigation\Tests\TestCase;
 
 class MenuAncestorChainTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_ancestors_walk_root_to_parent_including_trashed_rows(): void
     {
         $repo = app(MenuRepositoryInterface::class);

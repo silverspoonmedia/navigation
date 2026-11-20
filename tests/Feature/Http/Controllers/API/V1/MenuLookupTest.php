@@ -5,10 +5,9 @@ namespace App\Domain\Navigation\Tests\Feature\Http\Controllers\API\V1;
 use App\Domain\Identity\Models\User;
 use App\Domain\Navigation\Enums\MenuAudience;
 use App\Domain\Navigation\Models\Menu;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\Navigation\Tests\TestCase;
+use App\Support\Testing\Concerns\SeedsRolesAndPermissions;
 use Illuminate\Support\Facades\Hash;
-use Tests\Concerns\SeedsRolesAndPermissions;
-use Tests\TestCase;
 
 /**
  * Select2 menu lookup for the Dynamic Menu CRUD (`/api/v1/navigation/lookups/menus`).
@@ -18,7 +17,6 @@ use Tests\TestCase;
  */
 class MenuLookupTest extends TestCase
 {
-    use RefreshDatabase;
     use SeedsRolesAndPermissions;
 
     protected function setUp(): void

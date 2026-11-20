@@ -10,15 +10,13 @@ use App\Domain\Navigation\Exceptions\InvalidMenuPositionException;
 use App\Domain\Navigation\Exceptions\MenuHasChildrenException;
 use App\Domain\Navigation\Models\Menu;
 use App\Domain\Navigation\Repositories\Eloquent\MenuRepository;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Domain\Navigation\Tests\TestCase;
+use App\Support\Testing\Concerns\SeedsRolesAndPermissions;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Tests\Concerns\SeedsRolesAndPermissions;
-use Tests\TestCase;
 
 class MenuRepositoryTest extends TestCase
 {
-    use RefreshDatabase;
     use SeedsRolesAndPermissions;
 
     private MenuRepository $repository;
