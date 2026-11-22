@@ -7,6 +7,7 @@ use App\Domain\Navigation\Enums\MenuAudience;
 use App\Domain\Navigation\Models\Menu;
 use App\Domain\Navigation\Repositories\Contracts\MenuRepositoryInterface;
 use App\Domain\Navigation\Support\MenuLayout;
+use App\Support\Navigation\MenuContributorRegistry;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,11 @@ use RuntimeException;
  *
  * This seeder is intentionally authoritative: every run replaces all active and
  * trashed menu rows so existing installations converge on the same UX tree.
+ *
+ * The tree's **shape** is the package's (workspace / products / administration);
+ * the nodes a product owns arrive as {@see MenuContributor} registrations and are
+ * merged by node key. With no product installed the same code seeds the core tree
+ * and an empty group is dropped, so the package names no product.
  */
 class MenuSeeder extends Seeder
 {
@@ -32,14 +38,124 @@ class MenuSeeder extends Seeder
             ->pluck('id', 'name')
             ->all();
 
-        DB::transaction(function (): void {
+        $contributions = $this->contributions();
+
+        DB::transaction(function () use ($contributions): void {
             Menu::withTrashed()->forceDelete();
 
-            $this->seedTree($this->sidebarTree(), MenuLayout::SIDEBAR);
-            $this->seedTree($this->navbarTree(), MenuLayout::NAVBAR);
+            $this->seedTree($this->mergeContributions($this->sidebarTree(), $contributions), MenuLayout::SIDEBAR);
+            $this->seedTree($this->mergeContributions($this->navbarTree(), $contributions), MenuLayout::NAVBAR);
         });
 
         app(MenuRepositoryInterface::class)->flushNavigationCache();
+    }
+
+    /**
+     * Contributions grouped by target node key, or an empty map on a bare host.
+     *
+     * @return array<string, list<array{nodes: list<array<string, mixed>>, after: string|null}>>
+     */
+    private function contributions(): array
+    {
+        if (! app()->bound(MenuContributorRegistry::class)) {
+            return [];
+        }
+
+        return app(MenuContributorRegistry::class)->contributions();
+    }
+
+    /**
+     * Insert every contribution under the node its target key names.
+     *
+     * A contribution lands after the sibling key its `after` names — including a
+     * node another contribution just inserted — or at the end of the group.
+     *
+     * @param  list<array<string, mixed>>  $nodes
+     * @param  array<string, list<array{nodes: list<array<string, mixed>>, after: string|null}>>  $contributions
+     * @return list<array<string, mixed>>
+     */
+    private function mergeContributions(array $nodes, array $contributions, string $prefix = ''): array
+    {
+        $merged = [];
+
+        foreach ($nodes as $node) {
+            $path = $this->nodePath($prefix, $node);
+            $children = $node['children'] ?? [];
+
+            if ($children !== []) {
+                $node['children'] = $this->mergeContributions($children, $contributions, $path ?? '');
+            }
+
+            if ($path !== null && isset($contributions[$path])) {
+                $node['children'] = $this->applyContribution($node['children'] ?? [], $contributions[$path]);
+            }
+
+            $merged[] = $node;
+        }
+
+        // A group whose only purpose was product placement collapses to nothing.
+        return array_values(array_filter(
+            $merged,
+            fn (array $node): bool => ! ($node['drop_when_empty'] ?? false) || ($node['children'] ?? []) !== [],
+        ));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $children
+     * @param  list<array{nodes: list<array<string, mixed>>, after: string|null}>  $entries
+     * @return list<array<string, mixed>>
+     */
+    private function applyContribution(array $children, array $entries): array
+    {
+        foreach ($entries as $entry) {
+            $anchorKey = $entry['after'];
+
+            if ($anchorKey === null) {
+                $children = [...$children, ...$entry['nodes']];
+
+                continue;
+            }
+
+            $position = $this->indexOfKey($children, $anchorKey);
+
+            if ($position === null) {
+                $children = [...$children, ...$entry['nodes']];
+
+                continue;
+            }
+
+            array_splice($children, $position + 1, 0, $entry['nodes']);
+        }
+
+        return $children;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $nodes
+     */
+    private function indexOfKey(array $nodes, string $key): ?int
+    {
+        foreach ($nodes as $index => $node) {
+            if (($node['key'] ?? null) === $key) {
+                return $index;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $node
+     */
+    private function nodePath(string $prefix, array $node): ?string
+    {
+        $key = $node['key'] ?? null;
+
+        if (! is_string($key) || $key === '') {
+            return null;
+        }
+
+        return $prefix === '' ? $key : $prefix.'.'.$key;
     }
 
     /**
@@ -47,7 +163,7 @@ class MenuSeeder extends Seeder
      */
     private function seedTree(array $nodes, string $layout, ?string $parentId = null): void
     {
-        foreach ($nodes as $index => $node) {
+        foreach (array_values($nodes) as $index => $node) {
             $children = $node['children'] ?? [];
             $roleNames = $node['roles'] ?? [];
 
@@ -65,7 +181,7 @@ class MenuSeeder extends Seeder
                 // node can never carry role pivots under a non-role audience.
                 'audience' => $node['audience'] ?? ($roleNames === [] ? MenuAudience::Auth : MenuAudience::Role),
             ]);
-
+ 
             if ($roleNames !== []) {
                 $menu->roles()->sync($this->idsForRoles($roleNames));
             }
@@ -90,7 +206,7 @@ class MenuSeeder extends Seeder
         if ($missing !== []) {
             throw new RuntimeException(
                 'MenuSeeder references unseeded role(s): '.implode(', ', array_unique($missing))
-                .'. Seed RoleSeeder and ArchivdRoleSeeder before MenuSeeder.'
+                .'. Seed RoleSeeder and the product role seeders (e.g. the product that owns the contributed node) before MenuSeeder.'
             );
         }
 
@@ -110,22 +226,26 @@ class MenuSeeder extends Seeder
 
         return [
             [
+                'key' => 'workspace',
                 'name' => $this->translations('Workspace', 'Ruang Kerja', 'ワークスペース'),
                 'type' => 'h',
                 'children' => [
                     [
+                        'key' => 'workspace.dashboard',
                         'name' => $this->translations('Dashboard', 'Beranda', 'ダッシュボード'),
                         'icon' => 'bi bi-speedometer2',
                         'route' => 'dashboard',
                         'type' => 'p',
                     ],
                     [
+                        'key' => 'workspace.notifications',
                         'name' => $this->translations('Notifications', 'Notifikasi', '通知'),
                         'icon' => 'bi bi-bell',
                         'route' => 'notifications.index',
                         'type' => 'p',
                     ],
                     [
+                        'key' => 'workspace.services',
                         'name' => $this->translations('Services', 'Layanan', 'サービス'),
                         'icon' => 'bi bi-box-seam',
                         'route' => 'services.index',
@@ -134,49 +254,28 @@ class MenuSeeder extends Seeder
                 ],
             ],
             [
+                // Products is a placement group: a product domain contributes its
+                // nodes here (see MenuContributor); with none installed it drops.
+                'key' => 'products',
                 'name' => $this->translations('Products', 'Produk', 'プロダクト'),
                 'type' => 'h',
-                'children' => [
-                    [
-                        'name' => $this->translations('Archivd', 'Archivd', 'Archivd'),
-                        'icon' => 'bi bi-cloud',
-                        'route' => 'archivd.index',
-                        'type' => 'p',
-                        'children' => [
-                            [
-                                'name' => $this->translations('My Files', 'File Saya', 'マイファイル'),
-                                'icon' => 'bi bi-folder2-open',
-                                'route' => 'archivd.index',
-                                'type' => 'c',
-                            ],
-                            [
-                                'name' => $this->translations('Trash', 'Sampah', 'ゴミ箱'),
-                                'icon' => 'bi bi-trash3',
-                                'route' => 'archivd.trash',
-                                'type' => 'c',
-                            ],
-                            [
-                                'name' => $this->translations('DMCA Blocklist', 'Daftar Blokir DMCA', 'DMCA ブロックリスト'),
-                                'icon' => 'bi bi-shield-x',
-                                'route' => 'archivd.blocklist.index',
-                                'type' => 'c',
-                                'roles' => [...$managementRoles, 'Archivd Admin'],
-                            ],
-                        ],
-                    ],
-                ],
+                'drop_when_empty' => true,
+                'children' => [],
             ],
             [
+                'key' => 'administration',
                 'name' => $this->translations('Administration', 'Administrasi', '管理'),
                 'type' => 'h',
                 'children' => [
                     [
+                        'key' => 'administration.access-control',
                         'name' => $this->translations('Access control', 'Kontrol akses', 'アクセス管理'),
                         'icon' => 'bi bi-people',
                         'type' => 'p',
                         'roles' => $managementRoles,
                         'children' => [
                             [
+                                'key' => 'administration.access-control.users',
                                 'name' => $this->translations('User management', 'Manajemen Pengguna', 'ユーザー管理'),
                                 'icon' => 'bi bi-people',
                                 'route' => 'users.index',
@@ -184,6 +283,7 @@ class MenuSeeder extends Seeder
                                 'roles' => $managementRoles,
                             ],
                             [
+                                'key' => 'administration.access-control.activations',
                                 'name' => $this->translations('Product activations', 'Aktivasi Produk', 'プロダクト有効化'),
                                 'icon' => 'bi bi-toggle-on',
                                 'route' => 'product-activations.index',
@@ -191,6 +291,7 @@ class MenuSeeder extends Seeder
                                 'roles' => $managementRoles,
                             ],
                             [
+                                'key' => 'administration.access-control.domain-access',
                                 'name' => $this->translations('Product domain access', 'Akses Domain Produk', 'プロダクトドメインアクセス'),
                                 'icon' => 'bi bi-shield-lock',
                                 'route' => 'domain-access.index',
@@ -200,12 +301,14 @@ class MenuSeeder extends Seeder
                         ],
                     ],
                     [
+                        'key' => 'administration.payments',
                         'name' => $this->translations('Payments', 'Pembayaran', '決済'),
                         'icon' => 'bi bi-credit-card',
                         'type' => 'p',
                         'roles' => $managementRoles,
                         'children' => [
                             [
+                                'key' => 'administration.payments.income',
                                 'name' => $this->translations('Payment income', 'Pendapatan pembayaran', '決済収入'),
                                 'icon' => 'bi bi-graph-up-arrow',
                                 'route' => 'payments.income.index',
@@ -213,6 +316,7 @@ class MenuSeeder extends Seeder
                                 'roles' => $managementRoles,
                             ],
                             [
+                                'key' => 'administration.payments.invoices',
                                 'name' => $this->translations('Invoices', 'Invoice', '請求書'),
                                 'icon' => 'bi bi-receipt',
                                 'route' => 'invoices.index',
@@ -220,6 +324,7 @@ class MenuSeeder extends Seeder
                                 'roles' => $managementRoles,
                             ],
                             [
+                                'key' => 'administration.payments.subscriptions',
                                 'name' => $this->translations('Subscriptions', 'Langganan', 'サブスクリプション'),
                                 'icon' => 'bi bi-arrow-repeat',
                                 'route' => 'subscriptions.index',
@@ -227,6 +332,7 @@ class MenuSeeder extends Seeder
                                 'roles' => $managementRoles,
                             ],
                             [
+                                'key' => 'administration.payments.channels',
                                 'name' => $this->translations('Payment channels', 'Channel pembayaran', '決済チャネル'),
                                 'icon' => 'bi bi-credit-card-2-front',
                                 'route' => 'payment-channels.index',
@@ -234,6 +340,7 @@ class MenuSeeder extends Seeder
                                 'roles' => $managementRoles,
                             ],
                             [
+                                'key' => 'administration.payments.gateways',
                                 'name' => $this->translations('Payment gateways', 'Payment gateway', '決済ゲートウェイ'),
                                 'icon' => 'bi bi-diagram-3',
                                 'route' => 'payment-gateways.index',
@@ -243,12 +350,14 @@ class MenuSeeder extends Seeder
                         ],
                     ],
                     [
+                        'key' => 'administration.inference',
                         'name' => $this->translations('Inference', 'Inferensi', '推論'),
                         'icon' => 'bi bi-cpu',
                         'type' => 'p',
                         'roles' => $managementRoles,
                         'children' => [
                             [
+                                'key' => 'administration.inference.model-cards',
                                 'name' => $this->translations('Model catalog', 'Katalog model', 'モデルカタログ'),
                                 'icon' => 'bi bi-boxes',
                                 'route' => 'inference.model-cards.index',
@@ -256,6 +365,7 @@ class MenuSeeder extends Seeder
                                 'roles' => $managementRoles,
                             ],
                             [
+                                'key' => 'administration.inference.providers',
                                 'name' => $this->translations('Providers', 'Provider', 'プロバイダー'),
                                 'icon' => 'bi bi-hdd-network',
                                 'route' => 'inference.providers.index',
@@ -263,6 +373,7 @@ class MenuSeeder extends Seeder
                                 'roles' => $managementRoles,
                             ],
                             [
+                                'key' => 'administration.inference.usage-events',
                                 'name' => $this->translations('Usage events', 'Event penggunaan', '利用イベント'),
                                 'icon' => 'bi bi-graph-up',
                                 'route' => 'inference.usage-events.index',
@@ -272,6 +383,7 @@ class MenuSeeder extends Seeder
                         ],
                     ],
                     [
+                        'key' => 'administration.ai-connections',
                         'name' => $this->translations('AI connections', 'Koneksi AI', 'AI 接続'),
                         'icon' => 'bi bi-plug',
                         'route' => 'ai.connections.index',
@@ -279,12 +391,14 @@ class MenuSeeder extends Seeder
                         'roles' => $managementRoles,
                     ],
                     [
+                        'key' => 'administration.monitoring',
                         'name' => $this->translations('Monitoring', 'Pemantauan', '監視'),
                         'icon' => 'bi bi-activity',
                         'type' => 'p',
                         'roles' => $adminRoles,
                         'children' => [
                             [
+                                'key' => 'administration.monitoring.activity-log',
                                 'name' => $this->translations('Activity log', 'Log Aktivitas', 'アクティビティログ'),
                                 'icon' => 'bi bi-journal-text',
                                 'route' => 'activity-logs.index',
@@ -292,6 +406,7 @@ class MenuSeeder extends Seeder
                                 'roles' => $adminRoles,
                             ],
                             [
+                                'key' => 'administration.monitoring.error-log',
                                 'name' => $this->translations('Error log', 'Log Error', 'エラーログ'),
                                 'icon' => 'bi bi-bug',
                                 'route' => 'error-logs.index',
@@ -301,12 +416,14 @@ class MenuSeeder extends Seeder
                         ],
                     ],
                     [
+                        'key' => 'settings',
                         'name' => $this->translations('Settings', 'Pengaturan', '設定'),
                         'icon' => 'bi bi-gear',
                         'type' => 'p',
                         'roles' => $adminRoles,
                         'children' => [
                             [
+                                'key' => 'settings.platform',
                                 'name' => $this->translations('Platform', 'Platform', 'プラットフォーム'),
                                 'icon' => 'bi bi-sliders',
                                 'route' => 'settings.platform',
@@ -314,20 +431,7 @@ class MenuSeeder extends Seeder
                                 'roles' => $adminRoles,
                             ],
                             [
-                                'name' => $this->translations('Archivd', 'Archivd', 'Archivd'),
-                                'icon' => 'bi bi-cloud',
-                                'route' => 'settings.archivd',
-                                'type' => 'c',
-                                'roles' => $adminRoles,
-                            ],
-                            [
-                                'name' => $this->translations('Microstock', 'Microstock', 'Microstock'),
-                                'icon' => 'bi bi-images',
-                                'route' => 'settings.microstock',
-                                'type' => 'c',
-                                'roles' => $adminRoles,
-                            ],
-                            [
+                                'key' => 'settings.notification-audiences',
                                 'name' => $this->translations('Notification audiences', 'Audiens notifikasi', '通知オーディエンス'),
                                 'icon' => 'bi bi-bell',
                                 'route' => 'notification-audiences.index',
@@ -335,6 +439,7 @@ class MenuSeeder extends Seeder
                                 'roles' => $adminRoles,
                             ],
                             [
+                                'key' => 'settings.currencies',
                                 'name' => $this->translations('Currencies', 'Mata uang', '通貨'),
                                 'icon' => 'bi bi-currency-exchange',
                                 'route' => 'currencies.index',
@@ -344,12 +449,14 @@ class MenuSeeder extends Seeder
                         ],
                     ],
                     [
+                        'key' => 'administration.navigation',
                         'name' => $this->translations('Navigation', 'Navigasi', 'ナビゲーション'),
                         'icon' => 'bi bi-list-nested',
                         'type' => 'p',
                         'roles' => $managementRoles,
                         'children' => [
                             [
+                                'key' => 'administration.navigation.menu-list',
                                 'name' => $this->translations('Menu list', 'Daftar Menu', 'メニュー一覧'),
                                 'icon' => 'bi bi-list-ul',
                                 'route' => 'menus.index',
@@ -357,6 +464,7 @@ class MenuSeeder extends Seeder
                                 'roles' => $managementRoles,
                             ],
                             [
+                                'key' => 'administration.navigation.trashed',
                                 'name' => $this->translations('Trashed menus', 'Menu Terhapus', '削除済みメニュー'),
                                 'icon' => 'bi bi-trash',
                                 'route' => 'menus.trashed',
@@ -420,30 +528,6 @@ class MenuSeeder extends Seeder
                 'zh_CN' => '产品',
                 'ar' => 'المنتجات',
                 'ru' => 'Продукты',
-            ],
-            'Archivd' => [
-                'ko' => 'Archivd',
-                'zh_CN' => 'Archivd',
-                'ar' => 'Archivd',
-                'ru' => 'Archivd',
-            ],
-            'My Files' => [
-                'ko' => '내 파일',
-                'zh_CN' => '我的文件',
-                'ar' => 'ملفاتي',
-                'ru' => 'Мои файлы',
-            ],
-            'Trash' => [
-                'ko' => '휴지통',
-                'zh_CN' => '回收站',
-                'ar' => 'المهملات',
-                'ru' => 'Корзина',
-            ],
-            'DMCA Blocklist' => [
-                'ko' => 'DMCA 차단 목록',
-                'zh_CN' => 'DMCA 黑名单',
-                'ar' => 'قائمة حظر DMCA',
-                'ru' => 'Список блокировки DMCA',
             ],
             'Administration' => [
                 'ko' => '관리',
@@ -570,12 +654,6 @@ class MenuSeeder extends Seeder
                 'zh_CN' => '平台',
                 'ar' => 'المنصة',
                 'ru' => 'Платформа',
-            ],
-            'Microstock' => [
-                'ko' => '마이크로스톡',
-                'zh_CN' => 'Microstock',
-                'ar' => 'Microstock',
-                'ru' => 'Microstock',
             ],
             'Notification audiences' => [
                 'ko' => '알림 대상',
