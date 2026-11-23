@@ -181,7 +181,7 @@ class MenuSeeder extends Seeder
                 // node can never carry role pivots under a non-role audience.
                 'audience' => $node['audience'] ?? ($roleNames === [] ? MenuAudience::Auth : MenuAudience::Role),
             ]);
- 
+
             if ($roleNames !== []) {
                 $menu->roles()->sync($this->idsForRoles($roleNames));
             }
