@@ -147,47 +147,66 @@ class NavigationMenuTest extends TestCase
         );
     }
 
-    public function test_navigation_tree_resolves_chinese_translation_for_zh_cn_request(): void
+    public function test_navigation_tree_resolves_indonesian_translation_for_id_request(): void
     {
         $this->makeMenu([
-            'name' => ['en' => 'English label', 'zh_CN' => '简体中文标签'],
+            'name' => ['en' => 'English label', 'id' => 'Label Indonesia'],
             'type' => 'c',
             'audience' => MenuAudience::All,
         ]);
 
+        app()->setLocale('id');
+
+        $response = $this->getJson('/api/v1/navigation/menus')->assertOk();
+
+        $this->assertTrue(
+            collect($response->json('data'))->pluck('name')->contains('Label Indonesia'),
+        );
+    }
+
+    public function test_a_retired_locale_falls_back_to_the_reference_locale(): void
+    {
+        $this->makeMenu([
+            'name' => ['en' => 'English label', 'id' => 'Label Indonesia', 'zh_CN' => '简体中文标签'],
+            'type' => 'c',
+            'audience' => MenuAudience::All,
+        ]);
+
+        // `zh_CN` left supported_locales: SetLocale refuses it, so the tree renders
+        // the reference copy rather than a row nobody translated any more.
         app()->setLocale('zh_CN');
 
         $response = $this->getJson('/api/v1/navigation/menus')->assertOk();
 
         $this->assertTrue(
-            collect($response->json('data'))->pluck('name')->contains('简体中文标签'),
+            collect($response->json('data'))->pluck('name')->contains('English label'),
         );
     }
 
     public function test_spa_locale_header_wins_over_stale_cookie(): void
     {
         $this->makeMenu([
-            'name' => ['en' => 'English label', 'id' => 'Label Indonesia', 'ar' => 'تسمية عربية'],
+            'name' => ['en' => 'English label', 'id' => 'Label Indonesia'],
             'type' => 'c',
             'audience' => MenuAudience::All,
         ]);
 
-        // Stale cookie says id, but the SPA's current header says ar. The header
-        // must win so a direction-swap reload (which can abort the auth/locale
-        // persist that refreshes the cookie) still resolves Arabic.
+        // Stale cookie says en, but the SPA's current header says id. The header
+        // must win so a reload (which can abort the auth/locale persist that
+        // refreshes the cookie) still resolves the current language.
         $response = $this
-            ->withUnencryptedCookie('locale', 'id')
-            ->withHeader('X-SPA-Locale', 'ar')
+            ->withUnencryptedCookie('locale', 'en')
+            ->withHeader('X-SPA-Locale', 'id')
             ->getJson('/api/v1/navigation/menus')
             ->assertOk();
 
-        $this->assertSame('تسمية عربية', $this->findMenuNode($response->json('data'), 'تسمية عربية')['name']);
+        $this->assertSame('Label Indonesia', $this->findMenuNode($response->json('data'), 'Label Indonesia')['name']);
     }
 
     public function test_user_db_locale_still_wins_over_header_and_cookie(): void
     {
         $this->makeMenu([
-            'name' => ['en' => 'English label', 'id' => 'Label Indonesia', 'ar' => 'تسمية عربية'],
+            'name' => ['en' => 'English label', 'id' => 'Label Indonesia', 'ja' => '日本語ラベル'],
             'type' => 'c',
             'audience' => MenuAudience::All,
         ]);
@@ -196,10 +215,11 @@ class NavigationMenuTest extends TestCase
         $user->forceFill(['locale' => 'id'])->save();
 
         // DB preference is authoritative: even with a conflicting header+cookie,
-        // the authenticated user's stored locale wins.
+        // the authenticated user's stored locale wins. The header names a retired
+        // locale on purpose, so the assertion cannot pass by accident.
         $response = $this->actingAsJwt($user)
-            ->withUnencryptedCookie('locale', 'ar')
-            ->withHeader('X-SPA-Locale', 'ar')
+            ->withUnencryptedCookie('locale', 'ja')
+            ->withHeader('X-SPA-Locale', 'ja')
             ->getJson('/api/v1/navigation/menus')
             ->assertOk();
 
@@ -212,12 +232,10 @@ class NavigationMenuTest extends TestCase
             'name' => [
                 'en' => 'English label',
                 'id' => 'Label Indonesia',
-                'ja' => '日本語ラベル',
             ],
             'description' => [
                 'en' => 'English description',
                 'id' => 'Deskripsi Indonesia',
-                'ja' => '日本語の説明',
             ],
             'type' => 'c',
             'audience' => MenuAudience::All,
@@ -229,14 +247,10 @@ class NavigationMenuTest extends TestCase
         app()->setLocale('id');
         $indonesian = $this->getJson('/api/v1/navigation/menus')->assertOk()->json('data');
 
-        app()->setLocale('ja');
-        $japanese = $this->getJson('/api/v1/navigation/menus')->assertOk()->json('data');
-
+        // A cache keyed only on the menu tree would serve the English copy here.
         $this->assertSame('English label', $this->findMenuNode($english, 'English label')['name']);
         $this->assertSame('Label Indonesia', $this->findMenuNode($indonesian, 'Label Indonesia')['name']);
         $this->assertSame('Deskripsi Indonesia', $this->findMenuNode($indonesian, 'Label Indonesia')['description']);
-        $this->assertSame('日本語ラベル', $this->findMenuNode($japanese, '日本語ラベル')['name']);
-        $this->assertSame('日本語の説明', $this->findMenuNode($japanese, '日本語ラベル')['description']);
     }
 
     public function test_navigation_tree_filters_by_query_and_keeps_ancestors(): void
@@ -739,17 +753,15 @@ class NavigationMenuTest extends TestCase
             ->assertNotFound();
     }
 
-    public function test_store_accepts_spa_zh_cn_alias_and_canonicalizes_to_zh_cn_backend(): void
+    public function test_store_round_trips_every_supported_locale(): void
     {
         $admin = $this->userWithRole('Admin');
 
         // A locale map must cover EVERY supported locale
-        // (validateTranslatableAllLocales), so build the payload from config.
-        // The `zh-CN` key is the SPA alias of `zh_CN` and must be accepted.
+        // (validateTranslatableAllLocales), so the payload is built from config
+        // rather than restated — a locale added later is covered automatically.
         $name = collect(config('localization.supported_locales'))
-            ->mapWithKeys(fn (string $locale): array => [
-                $locale === 'zh_CN' ? 'zh-CN' : $locale => $locale === 'zh_CN' ? '中文标签' : "Aliased {$locale}",
-            ])
+            ->mapWithKeys(fn (string $locale): array => [$locale => "Label {$locale}"])
             ->all();
 
         $response = $this->actingAsJwt($admin)
@@ -758,56 +770,30 @@ class NavigationMenuTest extends TestCase
                 'type' => 'h',
             ])
             ->assertCreated()
-            ->assertJsonPath('data.name_translations.zh_CN', '中文标签');
-
-        $menu = Menu::query()->findOrFail($response->json('data.id'));
-
-        $this->assertSame('中文标签', $menu->getTranslation('name', 'zh_CN'));
-        $this->assertArrayNotHasKey('zh-CN', $menu->getTranslations('name'));
-    }
-
-    public function test_store_merges_mixed_zh_keys_onto_backend_key(): void
-    {
-        $admin = $this->userWithRole('Admin');
-
-        // A locale map must cover EVERY supported locale
-        // (validateTranslatableAllLocales), so build the payload from config.
-        // A stale canonical prefill (`zh_CN`) plus an SPA edit (`zh-CN`): the
-        // alias is the most recent write and must win the merge.
-        $name = collect(config('localization.supported_locales'))
-            ->mapWithKeys(fn (string $locale): array => [$locale => "Mixed {$locale}"])
-            ->all();
-
-        // Both keys present, alias last: zh_CN stale value + zh-CN edit.
-        $name['zh_CN'] = '旧标签';
-        $name['zh-CN'] = '新标签';
-
-        $response = $this->actingAsJwt($admin)
-            ->postJson('/api/v1/navigation/menus', [
-                'name' => $name,
-                'type' => 'h',
-            ])
-            ->assertCreated();
+            ->assertJsonPath('data.name_translations.id', 'Label id');
 
         $menu = Menu::query()->findOrFail($response->json('data.id'));
         $translations = $menu->getTranslations('name');
 
-        $this->assertSame('新标签', $translations['zh_CN']);
-        $this->assertArrayNotHasKey('zh-CN', $translations);
+        // Exactly the supported keys survive: no alias, no retired code.
+        $this->assertSame(
+            array_keys($name),
+            array_keys($translations),
+            'A stored locale map must carry exactly the supported locales.',
+        );
+
+        foreach ($name as $locale => $value) {
+            $this->assertSame($value, $translations[$locale]);
+        }
     }
 
-    public function test_update_accepts_spa_zh_cn_alias_without_validation_error(): void
+    public function test_update_round_trips_every_supported_locale(): void
     {
         $admin = $this->userWithRole('Admin');
         $menu = $this->makeMenu(['name' => ['en' => 'Original']]);
 
-        // A locale map must cover EVERY supported locale
-        // (validateTranslatableAllLocales), so build the payload from config.
-        // The `zh-CN` key is the SPA alias of `zh_CN` and must be accepted.
         $name = collect(config('localization.supported_locales'))
-            ->mapWithKeys(fn (string $locale): array => [
-                $locale === 'zh_CN' ? 'zh-CN' : $locale => $locale === 'zh_CN' ? '中文标签' : "Updated {$locale}",
-            ])
+            ->mapWithKeys(fn (string $locale): array => [$locale => "Updated {$locale}"])
             ->all();
 
         $this->actingAsJwt($admin)
@@ -815,12 +801,29 @@ class NavigationMenuTest extends TestCase
                 'name' => $name,
             ])
             ->assertOk()
-            ->assertJsonPath('data.name_translations.zh_CN', '中文标签');
+            ->assertJsonPath('data.name_translations.id', 'Updated id');
 
         $fresh = $menu->fresh();
         $this->assertNotNull($fresh);
-        $this->assertSame('中文标签', $fresh->getTranslation('name', 'zh_CN'));
-        $this->assertArrayNotHasKey('zh-CN', $fresh->getTranslations('name'));
+        $this->assertSame($name, $fresh->getTranslations('name'));
+    }
+
+    public function test_store_rejects_a_retired_locale_key(): void
+    {
+        // `zh_CN` left supported_locales; accepting it would persist a
+        // translation the locale files can no longer render.
+        $name = collect(config('localization.supported_locales'))
+            ->mapWithKeys(fn (string $locale): array => [$locale => "Label {$locale}"])
+            ->all();
+        $name['zh_CN'] = '中文标签';
+
+        $this->actingAsJwt($this->userWithRole('Admin'))
+            ->postJson('/api/v1/navigation/menus', [
+                'name' => $name,
+                'type' => 'h',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['name']);
     }
 
     public function test_store_still_rejects_unknown_locale_keys(): void
