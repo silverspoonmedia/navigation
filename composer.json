@@ -3,7 +3,6 @@
     "description": "Silverspoon core domain package: RBAC + domain-access aware navigation menus.",
     "type": "library",
     "license": "proprietary",
-    "version": "1.3.2",
     "homepage": "https://github.com/silverspoonmedia/navigation",
     "support": {
         "source": "https://github.com/silverspoonmedia/navigation"
